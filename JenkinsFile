@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        SONARQUBE_URL = 'http://18.212.6.225:9000'
+        SONARQUBE_URL = 'http://44.208.24.143:9000'
     }
 
     stages {
