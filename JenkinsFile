@@ -42,7 +42,7 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                     sh '''
                         echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
-                        cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                        cd spring-boot-app
                         docker build -t spring-boot-app:${BUILD_NUMBER} .
                         docker logout
                     '''
@@ -54,7 +54,7 @@ pipeline {
         stage('Trivy Scan') {
             steps {
                 sh '''
-                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                    cd spring-boot-app
                     trivy image --format template --template "@/usr/local/share/trivy/templates/html.tpl" -o trivy-Image-report.html --exit-code 1 --severity CRITICAL --ignore-unfixed spring-boot-app:${BUILD_NUMBER}
                 '''
             }
