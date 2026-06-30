@@ -1,1 +1,114 @@
+pipeline {
+    agent any
+    environment {
+        SONARQUBE_URL = 'http://18.212.6.225:9000'
+    }
 
+    stages {
+        stage('Clone Repository') {
+            steps {
+                git credentialsId: 'dockerhub-creds', url: 'https://github.com/mahmoudSh58/Jenkins-full-project.git'
+            }
+        }
+        stage('Maven Build') {
+            steps {
+                sh '''
+                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                    mvn clean package -DskipTests
+                '''
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONARQUBE_TOKEN')]) {
+                    sh '''
+                        cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                        mvn sonar:sonar -Dsonar.projectKey=java-maven-sonar-argocd-helm-k8s -Dsonar.host.url=${SONARQUBE_URL} -Dsonar.login=${SONARQUBE_TOKEN}
+                    '''
+                }
+            }
+        }
+        stage("Maven Test"){
+            steps {
+                sh '''
+                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                    mvn test
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    sh '''
+                        echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+                        cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                        docker build -t spring-boot-app:${BUILD_NUMBER} .
+                        docker logout
+                    '''
+                }
+
+            }
+        }
+
+        stage('Trivy Scan') {
+            steps {
+                sh '''
+                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                    trivy image --format template --template "@/usr/local/share/trivy/templates/html.tpl" -o trivy-Image-report.html --exit-code 1 --severity CRITICAL --ignore-unfixed spring-boot-app:${BUILD_NUMBER}
+                '''
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    sh '''
+                        echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+                        docker tag spring-boot-app:${BUILD_NUMBER} $DOCKER_USERNAME/spring-boot-app:${BUILD_NUMBER}
+                        docker push $DOCKER_USERNAME/spring-boot-app:${BUILD_NUMBER}
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        post {
+            always {
+                archiveArtifacts artifacts: 'spring-boot-app/target/*.jar', fingerprint: true
+                archiveArtifacts artifacts: 'trivy-Image-report.html', fingerprint: true
+
+                script {
+                    def jobName = env.JOB_NAME
+                    def buildNumber = env.BUILD_NUMBER
+                    def pipelineStatus = currentBuild.result ?: 'UNKNOWN'
+                    def bannerColor = pipelineStatus.toUpperCase() == 'SUCCESS' ? 'green' : 'red'
+
+                    def body = """
+                        <html>
+                        <body>
+                        <div style="border: 4px solid ${bannerColor}; padding: 10px;">
+                        <h2>${jobName} - Build ${buildNumber}</h2>
+                        <div style="background-color: ${bannerColor}; padding: 10px;">
+                        <h3 style="color: white;">Pipeline Status: ${pipelineStatus.toUpperCase()}</h3>
+                        </div>
+                        <p>Check the <a href="${BUILD_URL}">console output</a>.</p>
+                        </div>
+                        </body>
+                        </html>
+                    """
+
+                    emailext (
+                        subject: "${jobName} - Build ${buildNumber} - ${pipelineStatus.toUpperCase()}",
+                        body: body,
+                        to: 'mahmoudsharif914@gmail.com',
+                        mimeType: 'text/html',
+                        attachmentsPattern: '**/trivy-Image-report.html'
+                    )
+                }
+                cleanWs()
+            }
+        }
+
+    }
+}
