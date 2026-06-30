@@ -55,6 +55,7 @@ pipeline {
             steps {
                 sh '''
                     cd spring-boot-app
+                    trivy image --severity HIGH,CRITICAL --ignore-unfixed spring-boot-app:${BUILD_NUMBER}
                     trivy image --format template --template "@/usr/local/share/trivy/templates/html.tpl" -o trivy-Image-report.html  --severity HIGH,CRITICAL --ignore-unfixed spring-boot-app:${BUILD_NUMBER}
                 '''
             }
