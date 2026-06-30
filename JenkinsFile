@@ -13,7 +13,7 @@ pipeline {
         stage('Maven Build') {
             steps {
                 sh '''
-                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                    cd spring-boot-app
                     mvn clean package -DskipTests
                 '''
             }
@@ -22,8 +22,8 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONARQUBE_TOKEN')]) {
                     sh '''
-                        cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-                        mvn sonar:sonar -Dsonar.projectKey=java-maven-sonar-argocd-helm-k8s -Dsonar.host.url=${SONARQUBE_URL} -Dsonar.login=${SONARQUBE_TOKEN}
+                        cd spring-boot-app
+                        mvn sonar:sonar -Dsonar.projectKey=spring-boot-app -Dsonar.host.url=${SONARQUBE_URL} -Dsonar.login=${SONARQUBE_TOKEN}
                     '''
                 }
             }
@@ -31,7 +31,7 @@ pipeline {
         stage("Maven Test"){
             steps {
                 sh '''
-                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                    cd spring-boot-app
                     mvn test
                 '''
             }
